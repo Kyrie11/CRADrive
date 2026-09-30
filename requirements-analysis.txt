@@ -1,3 +1,0 @@
-# Core generation/running uses the Python standard library plus the upstream environments.
-# matplotlib is optional and only needed for plots from scripts/analyze_pilot.py.
-matplotlib>=3.5

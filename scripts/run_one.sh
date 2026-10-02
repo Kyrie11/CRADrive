@@ -44,7 +44,7 @@ case "$AGENT" in
   *) usage;;
 esac
 
-cd "$WORKDIR"
+cd "$B2D_ROOT"
 python -u "$EVAL" \
   --routes="$ROUTE_XML" \
   --repetitions=1 \

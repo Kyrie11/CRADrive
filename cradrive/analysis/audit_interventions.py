@@ -58,7 +58,7 @@ def main():
     groups=defaultdict(list)
     for r in rows:
         fam=r.get("family") or ""
-        if fam not in ("pedestrian_reaction_time", "pedestrian_heading_sweep", "pedestrian_direction_control"):
+        if fam not in ("pedestrian_reaction_time", "pedestrian_heading_sweep", "pedestrian_direction_control", "highway_cutin_speed"):
             continue
         if "trace_valid" in r and not b(r.get("trace_valid")):
             continue
@@ -123,7 +123,7 @@ def main():
             pts=[(f(r.get("risk_rank")), f(r.get("intended_dcpa_at_first_visible"))) for r in tx]
             frac,npairs=pairwise_monotone_fraction(pts, higher_rank_should_lower_y=True, tol=0.25)
             if npairs and frac is not None and frac < 0.8:
-                status="WARN" if status=="PASS" else status
+                status="FAIL"
                 reasons.append(f"provisional_risk_rank_vs_intended_DCPA_consistency={frac:.2f}")
 
         elif fam == "pedestrian_direction_control":
@@ -131,6 +131,22 @@ def main():
                 status="FAIL"; reasons.append(f"first_visible_spread>{args.timing_tol}s")
             if spread(mot) is not None and spread(mot) > args.timing_tol:
                 status="FAIL"; reasons.append(f"motion_onset_spread>{args.timing_tol}s")
+
+        elif fam == "highway_cutin_speed":
+            # The configured percentage is only a treatment knob.  Require the
+            # realized interaction to be physically separable and ordered before
+            # interpreting a response curve.  Higher risk_rank (lower actor speed)
+            # should generally increase closing-speed demand.
+            closing=[f(r.get("max_closing_speed_event_window")) for r in tx]
+            event_es=[f(r.get("event_ego_speed")) for r in tx]
+            if levels >= 3 and unique_rounded(closing,1) < 3:
+                status="FAIL"; reasons.append("realized_closing_speed_not_separable")
+            pts=[(f(r.get("risk_rank")), f(r.get("max_closing_speed_event_window"))) for r in tx]
+            frac,npairs=pairwise_monotone_fraction(pts, higher_rank_should_lower_y=False, tol=0.25)
+            if npairs and frac is not None and frac < 0.8:
+                status="FAIL"; reasons.append(f"risk_rank_vs_closing_speed_consistency={frac:.2f}")
+            if spread(event_es) is not None and spread(event_es) > 1.5:
+                status="FAIL"; reasons.append("event_ego_speed_spread>1.5mps")
 
         outrows.append({
             "agent":agent,"family":fam,"route_id":route,"seed":seed,

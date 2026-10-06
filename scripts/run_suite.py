@@ -25,7 +25,7 @@ def completed_run(od: Path) -> bool:
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--manifest", required=True)
-    ap.add_argument("--agent", choices=["tcp","simlingo"], required=True)
+    ap.add_argument("--agent", choices=["tcp","simlingo","leadcvpr"], required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--seeds", default="1,2,3")
     ap.add_argument("--gpu-rank", default="0")

@@ -9,7 +9,7 @@ rows=[]
 for p in sorted(Path(args.runs).rglob('trace.jsonl')):
     s=summarize_trace(p)
     if s: rows.append(s)
-print('trace_valid route_eval checkpoint usable agent family route variant seed reason')
+print('trace_valid route_eval checkpoint usable_curve usable_paper agent family route variant seed reason')
 for s in rows:
     print(int(bool(s.get('trace_valid'))),int(bool(s.get('route_evaluated'))),int(bool(s.get('checkpoint_finalized'))),
-          int(bool(s.get('usable_for_curve'))),s.get('agent'),s.get('family'),s.get('route_id'),s.get('variant'),s.get('seed'),s.get('invalid_reason') or '-')
+          int(bool(s.get('usable_for_curve'))),int(bool(s.get('usable_for_paper'))),s.get('agent'),s.get('family'),s.get('route_id'),s.get('variant'),s.get('seed'),s.get('invalid_reason') or '-')

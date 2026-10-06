@@ -19,12 +19,27 @@ def main():
     ap.add_argument('--out',required=True)
     ap.add_argument('--metric',default='post_min_planner_desired_speed')
     ap.add_argument('--tolerance',type=float,default=0.25)
+    ap.add_argument('--audit',default='',help='intervention_audit.csv; PASS groups only when supplied')
+    ap.add_argument('--require-audit-pass',action='store_true',help='drop any run whose agent/family/route/seed audit is missing or not PASS')
+    ap.add_argument('--allow-unfinalized',action='store_true',help='diagnostic only: allow route-evaluated runs whose result.json was not finalized')
     args=ap.parse_args()
     rows=list(csv.DictReader(open(args.summary,encoding='utf-8')))
+    audit={}
+    if args.audit:
+        for a in csv.DictReader(open(args.audit,encoding='utf-8')):
+            audit[(a.get('agent'),a.get('family'),str(a.get('route_id')),str(a.get('seed')))]=a.get('status')
     groups={}
     for r in rows:
         if r.get('family') in ('',None,'pedestrian_direction_control'): continue
-        if 'usable_for_curve' in r and not b(r.get('usable_for_curve')): continue
+        usability='usable_for_curve' if args.allow_unfinalized else ('usable_for_paper' if 'usable_for_paper' in r else 'usable_for_curve')
+        if usability in r and not b(r.get(usability)): continue
+        if args.audit or args.require_audit_pass:
+            key=(r.get('agent'),r.get('family'),str(r.get('route_id')),str(r.get('seed')))
+            status=audit.get(key)
+            if args.require_audit_pass and status != 'PASS':
+                continue
+            if args.audit and status not in (None,'PASS'):
+                continue
         y=f(r.get(args.metric)); rr=f(r.get('risk_rank'))
         if y is None or rr is None: continue
         groups.setdefault((r.get('agent'),r.get('family'),r.get('route_id')),[]).append(r)

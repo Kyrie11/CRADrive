@@ -23,6 +23,9 @@ def main():
     ap.add_argument('--metric',default='post_min_planner_desired_speed')
     ap.add_argument('--min-levels',type=int,default=3)
     ap.add_argument('--allow-incomplete',action='store_true',help='plot singleton/incomplete diagnostic data')
+    ap.add_argument('--audit',default='',help='intervention_audit.csv; non-PASS groups are excluded')
+    ap.add_argument('--require-audit-pass',action='store_true',help='also reject groups missing from the audit file')
+    ap.add_argument('--allow-unfinalized',action='store_true',help='diagnostic only: allow route-evaluated runs without finalized result.json')
     argv=sys.argv[1:]
     # Defensive compatibility: the reported user error shows plot_curves.py was
     # passed twice (once as Python's script and once as argv[1]). Drop only an
@@ -36,11 +39,23 @@ def main():
             pass
     args=ap.parse_args(argv)
     rows=list(csv.DictReader(open(args.summary,encoding='utf-8')))
+    audit={}
+    if args.audit:
+        for a in csv.DictReader(open(args.audit,encoding='utf-8')):
+            audit[(a.get('agent'),a.get('family'),str(a.get('route_id')),str(a.get('seed')))]=a.get('status')
     out=Path(args.out); out.mkdir(parents=True,exist_ok=True)
     groups={}
     for r in rows:
         if r.get('family') in ('',None,'pedestrian_direction_control'): continue
-        if not args.allow_incomplete and 'usable_for_curve' in r and not as_bool(r.get('usable_for_curve')): continue
+        usability='usable_for_curve' if args.allow_unfinalized else ('usable_for_paper' if 'usable_for_paper' in r else 'usable_for_curve')
+        if not args.allow_incomplete and usability in r and not as_bool(r.get(usability)): continue
+        if args.audit or args.require_audit_pass:
+            key=(r.get('agent'),r.get('family'),str(r.get('route_id')),str(r.get('seed')))
+            status=audit.get(key)
+            if args.require_audit_pass and status != 'PASS':
+                continue
+            if args.audit and status not in (None,'PASS'):
+                continue
         if as_float(r.get(args.metric)) is None: continue
         groups.setdefault((r.get('agent'),r.get('family'),r.get('route_id')),[]).append(r)
     written=0; skipped=0

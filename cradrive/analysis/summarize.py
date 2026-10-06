@@ -70,7 +70,7 @@ def relevant_actors(r, max_distance=45.0, max_abs_z=3.0):
         d2,rz,tcpa,dcpa=_actor_geometry(r,a)
         if d2 is None: continue
         if rz is not None and abs(float(rz)) > max_abs_z: continue
-        if float(d2) <= max_distance:
+        if max_distance is None or float(d2) <= max_distance:
             out.append((a,float(d2),rz,tcpa,dcpa))
     return out
 
@@ -96,11 +96,24 @@ def actor_speed(a):
         return 0.0
 
 
-def find_first_visible_index(rows, max_distance=45.0):
+def find_first_onplane_index(rows):
+    """First frame where any scenario actor is placed on the drivable scene plane.
+
+    This is a privileged simulator event, *not* proof of camera visibility.  It is
+    deliberately independent of an arbitrary 45 m range threshold so the policy
+    cannot have reacted to the same actor at a larger distance before the dose is
+    measured.
+    """
     for i,r in enumerate(rows):
-        if relevant_actors(r,max_distance=max_distance):
+        if relevant_actors(r,max_distance=None):
             return i
     return None
+
+
+def find_first_visible_index(rows, max_distance=45.0):
+    # Backward-compatible name used by old CSV columns.  Scientific text should call
+    # this "first on-plane exposure", not visual visibility.
+    return find_first_onplane_index(rows)
 
 
 def find_motion_onset_index(rows, max_distance=45.0, speed_threshold=0.2):
@@ -128,10 +141,10 @@ def find_event_index(rows, family, max_distance=45.0):
     if fam in ('pedestrian_heading_sweep','pedestrian_direction_control'):
         i=find_first_visible_index(rows,max_distance=max_distance)
         if i is not None:
-            return i,'pedestrian_first_visible_heading_exposure'
+            return i,'pedestrian_first_onplane_heading_exposure'
     i=find_first_visible_index(rows,max_distance=max_distance)
     if i is not None:
-        return i,'first_onplane_actor_within_distance'
+        return i,'first_onplane_scenario_actor'
     return None,'not_found'
 
 def trace_integrity(rows):
@@ -230,15 +243,35 @@ def _intended_pedestrian_cpa(row, scenmeta, max_distance=45.0):
 
 def parse_result(trace_path):
     p=trace_path.with_name("result.json")
-    if not p.exists(): return {"checkpoint_finalized":False,"entry_status":"missing","n_result_records":0}
+    empty={"checkpoint_finalized":False,"entry_status":"missing","n_result_records":0,
+           "driving_score":None,"route_score":None,"infraction_penalty":None,"record_status":None}
+    if not p.exists(): return empty
     try: obj=json.load(open(p,encoding="utf-8"))
-    except Exception: return {"checkpoint_finalized":False,"entry_status":"invalid","n_result_records":0}
+    except Exception:
+        bad=dict(empty); bad["entry_status"]="invalid"; return bad
     cp=obj.get("_checkpoint") or {}
     rec=cp.get("records") or []
     glob=cp.get("global_record") or {}
     status=obj.get("entry_status")
     finalized=bool(rec or glob) and status != "Started"
-    return {"checkpoint_finalized":finalized,"entry_status":status,"n_result_records":len(rec)}
+    # A single-route CRADrive XML should yield one record.  Keep robust fallbacks for
+    # leaderboard variants whose result schema stores scores in global_record.
+    r=rec[0] if rec else glob
+    scores=(r or {}).get("scores") or {}
+    def _num(*keys):
+        for k in keys:
+            v=scores.get(k)
+            if v is not None:
+                try: return float(v)
+                except Exception: pass
+        return None
+    return {
+        "checkpoint_finalized":finalized,"entry_status":status,"n_result_records":len(rec),
+        "driving_score":_num("score_composed","driving_score","score"),
+        "route_score":_num("score_route","route_score"),
+        "infraction_penalty":_num("score_penalty","infraction_penalty"),
+        "record_status":(r or {}).get("status"),
+    }
 
 
 def _seed_from_path(path):
@@ -284,7 +317,7 @@ def summarize_trace(path, max_distance=45.0, pre_seconds=1.0, post_seconds=4.0):
     intended_tcpa_at_visible=intended_dcpa_at_visible=intended_actor_id=None
     if visible_idx is not None:
         intended_tcpa_at_visible,intended_dcpa_at_visible,intended_actor_id=_intended_pedestrian_cpa(
-            rows[visible_idx],scenmeta,max_distance=max_distance)
+            rows[visible_idx],scenmeta,max_distance=None)
     visible_ego=rows[visible_idx].get("ego") if visible_idx is not None else None
     event_ego=rows[event_idx].get("ego") or {}
     event_best=best_actor(rows[event_idx]) if event_found else None
@@ -336,7 +369,12 @@ def summarize_trace(path, max_distance=45.0, pre_seconds=1.0, post_seconds=4.0):
         "intervention_name":intervention_name,"intervention_value":intervention_value,
         "run_id":rows[0].get("run_id"),"n_frames":len(rows),"trace_valid":valid,"invalid_reason":reason,
         **logmeta,**resultmeta,
-        "event_found":event_found,"event_definition":event_definition,"first_visible_time":visible_t,
+        "event_found":event_found,"event_definition":event_definition,
+        "first_onplane_time":visible_t,
+        "first_onplane_ego_speed":(visible_ego or {}).get("speed") if visible_idx is not None else None,
+        # Legacy aliases retained so old analysis scripts remain readable.  These are
+        # simulator on-plane exposure, not camera-frustum/occlusion visibility.
+        "first_visible_time":visible_t,
         "first_visible_ego_speed":(visible_ego or {}).get("speed") if visible_idx is not None else None,
         "intended_tcpa_at_first_visible":intended_tcpa_at_visible,
         "intended_dcpa_at_first_visible":intended_dcpa_at_visible,
@@ -345,6 +383,7 @@ def summarize_trace(path, max_distance=45.0, pre_seconds=1.0, post_seconds=4.0):
         "motion_delay_from_first_visible":((motion_t-visible_t) if (motion_t is not None and visible_t is not None) else None),
         "collision_tta_at_first_visible":collision_tta_at_visible,
         "configured_reaction_time":scenmeta.get("reaction_time"),
+        "configured_speed_perc":scenmeta.get("speed_perc"),
         "event_time":event_t if event_found else None,"n_event_window":len(active),
         "event_ego_speed":event_ego.get("speed") if event_found else None,
         "event_actor_distance_2d":event_distance_2d,
@@ -374,6 +413,10 @@ def summarize_trace(path, max_distance=45.0, pre_seconds=1.0, post_seconds=4.0):
     # CARLA must have reached route criteria evaluation. Checkpoint finalization is
     # reported separately because an upstream cleanup bug can occur afterwards.
     out["usable_for_curve"]=bool(valid and logmeta["route_evaluated"] and event_found and post_ds)
+    # Final-paper analyses should additionally require the official leaderboard
+    # checkpoint to be finalized.  The looser field above is retained for diagnosing
+    # an upstream cleanup failure after route criteria have already been printed.
+    out["usable_for_paper"]=bool(out["usable_for_curve"] and resultmeta["checkpoint_finalized"])
     return out
 
 

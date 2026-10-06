@@ -52,14 +52,16 @@ def main():
                         target_scen = s
                         break
                 assert target_scen is not None
-                target_scen.attrib["type"] = fam["target_type"]
-                target_scen.attrib["name"] = f"{fam['target_type']}_{variant['label']}"
-                # Remove stale CRADrive params in case source XML was already modified.
-                for child in list(target_scen):
-                    if child.tag.startswith("cra_"):
-                        target_scen.remove(child)
-                for key, value in variant["params"].items():
-                    ET.SubElement(target_scen, key, {"value": str(value)})
+                use_source = bool(variant.get("use_source_scenario", False))
+                if not use_source:
+                    target_scen.attrib["type"] = fam["target_type"]
+                    target_scen.attrib["name"] = f"{fam['target_type']}_{variant['label']}"
+                    # Remove stale CRADrive params in case source XML was already modified.
+                    for child in list(target_scen):
+                        if child.tag.startswith("cra_"):
+                            target_scen.remove(child)
+                    for key, value in variant.get("params", {}).items():
+                        ET.SubElement(target_scen, key, {"value": str(value)})
 
                 xml_root = ET.Element("routes")
                 xml_root.append(route_copy)
@@ -71,9 +73,10 @@ def main():
 
                 meta = {
                     "family": fam["name"], "source_type": fam["source_type"],
-                    "target_type": fam["target_type"], "route_id": str(route_id),
-                    "variant": variant["label"], "risk_rank": variant["risk_rank"],
-                    "risk_order": fam["risk_order"], "params": variant["params"],
+                    "target_type": fam["source_type"] if use_source else fam["target_type"], "route_id": str(route_id),
+                    "variant": variant["label"], "risk_rank": variant.get("risk_rank"),
+                    "risk_order": fam["risk_order"], "params": variant.get("params", {}),
+                    "use_source_scenario": use_source,
                     "notes": fam.get("notes", ""), "route_xml": str(xml_path.resolve())
                 }
                 meta_path = run_dir / "variant.json"

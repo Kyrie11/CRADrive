@@ -1,4 +1,8 @@
-"""Model-agnostic online logging for CRADrive."""
+"""Model-agnostic online logging for CRADrive.
+
+The probe deliberately does not feed privileged simulator state back into the policy.
+It only logs it for post-hoc causal-response analysis.
+"""
 import json
 import math
 import os
@@ -40,16 +44,30 @@ def _jsonable(x):
     return str(x)
 
 
-class CRAProbeMixin:
-    """Mixin to append one compact JSON record per policy step.
+def _cpa_2d(dx, dy, rvx, rvy):
+    """Constant-velocity 2-D time/distance to closest point of approach.
 
-    It logs only simulator state and policy outputs. No privileged state is fed back to
-    the policy. This keeps the evaluation sensor-track compliant while allowing us to
-    compute realized risk (distance, lateral offset, closing speed, approximate TTC).
+    Relative velocity is actor - ego. tcpa is clipped at zero because a closest
+    approach in the past should not be interpreted as future collision risk.
     """
+    denom = rvx * rvx + rvy * rvy
+    if denom <= 1e-8:
+        return None, math.hypot(dx, dy)
+    tcpa = -(dx * rvx + dy * rvy) / denom
+    tcpa = max(0.0, tcpa)
+    cx = dx + rvx * tcpa
+    cy = dy + rvy * tcpa
+    return tcpa, math.hypot(cx, cy)
+
+
+class CRAProbeMixin:
+    """Append one compact JSON record per policy step."""
 
     def _cra_init(self, agent_name):
         self._cra_agent_name = agent_name
+        self._cra_run_id = os.environ.get("CRADRIVE_RUN_ID", "legacy")
+        self._cra_seed = os.environ.get("CRADRIVE_SEED")
+        self._cra_pid = os.getpid()
         trace_path = os.environ.get("CRADRIVE_TRACE_PATH")
         if not trace_path:
             trace_dir = Path(os.environ.get("CRADRIVE_TRACE_DIR", "."))
@@ -96,33 +114,40 @@ class CRAProbeMixin:
             world = hero.get_world()
             actors = world.get_actors()
             for actor in actors:
-                if actor.id == hero.id:
-                    continue
-                if actor.attributes.get("role_name") != "scenario":
+                if actor.id == hero.id or actor.attributes.get("role_name") != "scenario":
                     continue
                 atf = actor.get_transform()
                 aloc = atf.location
                 avel = actor.get_velocity()
                 dx, dy, dz = aloc.x - loc.x, aloc.y - loc.y, aloc.z - loc.z
-                euclid = math.sqrt(dx*dx + dy*dy + dz*dz)
-                longitudinal = dx*fwd.x + dy*fwd.y + dz*fwd.z
-                lateral = dx*right.x + dy*right.y + dz*right.z
-                actor_v_long = avel.x*fwd.x + avel.y*fwd.y + avel.z*fwd.z
+                euclid = math.sqrt(dx * dx + dy * dy + dz * dz)
+                distance_2d = math.hypot(dx, dy)
+                longitudinal = dx * fwd.x + dy * fwd.y + dz * fwd.z
+                lateral = dx * right.x + dy * right.y + dz * right.z
+                actor_v_long = avel.x * fwd.x + avel.y * fwd.y + avel.z * fwd.z
                 closing_speed = ego_v_long - actor_v_long
                 ttc = longitudinal / closing_speed if longitudinal > 0.0 and closing_speed > 0.05 else None
+                rvx, rvy = avel.x - vel.x, avel.y - vel.y
+                tcpa, dcpa = _cpa_2d(dx, dy, rvx, rvy)
                 actors_out.append({
                     "id": int(actor.id),
                     "type_id": actor.type_id,
                     "location": _vec(aloc),
                     "velocity": _vec(avel),
                     "distance": float(euclid),
+                    "distance_2d": float(distance_2d),
+                    "relative_z": float(dz),
                     "longitudinal": float(longitudinal),
                     "lateral": float(lateral),
                     "actor_speed_longitudinal": float(actor_v_long),
                     "closing_speed": float(closing_speed),
                     "ttc_longitudinal": _finite(ttc),
+                    "tcpa_2d": _finite(tcpa),
+                    "dcpa_2d": _finite(dcpa),
                 })
-            actors_out.sort(key=lambda a: a["distance"])
+            # Do not use 3-D Euclidean distance for selection: Bench2Drive may keep
+            # pedestrians underground before activation. Sort by on-plane 2-D distance.
+            actors_out.sort(key=lambda a: (abs(a.get("relative_z", 0.0)) > 3.0, a.get("distance_2d", a["distance"])))
         except Exception:
             pass
 
@@ -139,6 +164,10 @@ class CRAProbeMixin:
     def _cra_log(self, timestamp, control, model_output=None, extra=None):
         snap = self._cra_world_snapshot()
         record = {
+            "schema_version": 2,
+            "run_id": self._cra_run_id,
+            "pid": self._cra_pid,
+            "seed": self._cra_seed,
             "agent": self._cra_agent_name,
             "step": int(getattr(self, "step", self._cra_step)),
             "timestamp": float(timestamp),

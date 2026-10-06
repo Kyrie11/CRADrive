@@ -58,3 +58,21 @@ class SimLingoCRAAgent(_BASE.LingoAgent, CRAProbeMixin):
         control = super().run_step(input_data, timestamp, sensors=sensors)
         self._cra_log(timestamp, control, model_output=self._cra_last_model_output)
         return control
+
+    def destroy(self, results=None):
+        # SimLingo's upstream destroy() assumes cfg.data_module.encoder exists.
+        # Some released evaluation configs do not contain that key, which can raise
+        # during leaderboard cleanup *after* a completed route and prevent the
+        # checkpoint from being finalized. Upstream destroy only releases these
+        # heavy objects, so do the same defensively here.
+        for name in ("model", "config", "processor"):
+            if hasattr(self, name):
+                try:
+                    delattr(self, name)
+                except Exception:
+                    pass
+        try:
+            import gc
+            gc.collect()
+        except Exception:
+            pass

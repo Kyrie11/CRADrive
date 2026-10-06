@@ -1,0 +1,239 @@
+{
+  "source_routes": "leaderboard/data/bench2drive_0.0.4_val.xml",
+  "families": [
+    {
+      "name": "pedestrian_reaction_time",
+      "source_type": "PedestrianCrossing",
+      "target_type": "CRAPedestrianCrossing",
+      "route_ids": [
+        "13674",
+        "14382"
+      ],
+      "risk_order": "ascending_variant_index",
+      "notes": "Lower reaction_time = later pedestrian emergence = higher intended risk. Realized TTC is logged. v2 fixes pedestrian speed/idle across all matched variants to remove seed-induced kinematic variation.",
+      "variants": [
+        {
+          "label": "nominal_b2d",
+          "risk_rank": null,
+          "use_source_scenario": true,
+          "params": {}
+        },
+        {
+          "label": "rt5p5",
+          "risk_rank": 0,
+          "params": {
+            "cra_reaction_time": 5.5,
+            "cra_min_trigger_dist": 4.0,
+            "cra_ped_speed": 1.6,
+            "cra_ped_idle_time": 0.0
+          }
+        },
+        {
+          "label": "rt4p5",
+          "risk_rank": 1,
+          "params": {
+            "cra_reaction_time": 4.5,
+            "cra_min_trigger_dist": 4.0,
+            "cra_ped_speed": 1.6,
+            "cra_ped_idle_time": 0.0
+          }
+        },
+        {
+          "label": "rt3p5",
+          "risk_rank": 2,
+          "params": {
+            "cra_reaction_time": 3.5,
+            "cra_min_trigger_dist": 4.0,
+            "cra_ped_speed": 1.6,
+            "cra_ped_idle_time": 0.0
+          }
+        },
+        {
+          "label": "rt2p5",
+          "risk_rank": 3,
+          "params": {
+            "cra_reaction_time": 2.5,
+            "cra_min_trigger_dist": 4.0,
+            "cra_ped_speed": 1.6,
+            "cra_ped_idle_time": 0.0
+          }
+        },
+        {
+          "label": "rt1p5",
+          "risk_rank": 4,
+          "params": {
+            "cra_reaction_time": 1.5,
+            "cra_min_trigger_dist": 4.0,
+            "cra_ped_speed": 1.6,
+            "cra_ped_idle_time": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "name": "pedestrian_heading_sweep",
+      "source_type": "PedestrianCrossing",
+      "target_type": "CRAPedestrianCrossing",
+      "route_ids": [
+        "13674",
+        "14382"
+      ],
+      "risk_order": "ascending_variant_index_provisional_validate_by_dcpa",
+      "notes": "Primary v2 causal-dose family. Same spawn, visibility, speed, idle and trigger timing; only walker heading changes. Lower DCPA / greater path intersection should define realized risk; validate ordering before using risk_rank as ground truth.",
+      "variants": [
+        {
+          "label": "nominal_b2d",
+          "risk_rank": null,
+          "use_source_scenario": true,
+          "params": {}
+        },
+        {
+          "label": "yaw180",
+          "risk_rank": 0,
+          "params": {
+            "cra_reaction_time": 3.5,
+            "cra_min_trigger_dist": 4.0,
+            "cra_ped_speed": 1.6,
+            "cra_ped_idle_time": 0.0,
+            "cra_ped_yaw_offset": 180.0
+          }
+        },
+        {
+          "label": "yaw135",
+          "risk_rank": 1,
+          "params": {
+            "cra_reaction_time": 3.5,
+            "cra_min_trigger_dist": 4.0,
+            "cra_ped_speed": 1.6,
+            "cra_ped_idle_time": 0.0,
+            "cra_ped_yaw_offset": 135.0
+          }
+        },
+        {
+          "label": "yaw90",
+          "risk_rank": 2,
+          "params": {
+            "cra_reaction_time": 3.5,
+            "cra_min_trigger_dist": 4.0,
+            "cra_ped_speed": 1.6,
+            "cra_ped_idle_time": 0.0,
+            "cra_ped_yaw_offset": 90.0
+          }
+        },
+        {
+          "label": "yaw45",
+          "risk_rank": 3,
+          "params": {
+            "cra_reaction_time": 3.5,
+            "cra_min_trigger_dist": 4.0,
+            "cra_ped_speed": 1.6,
+            "cra_ped_idle_time": 0.0,
+            "cra_ped_yaw_offset": 45.0
+          }
+        },
+        {
+          "label": "yaw0",
+          "risk_rank": 4,
+          "params": {
+            "cra_reaction_time": 3.5,
+            "cra_min_trigger_dist": 4.0,
+            "cra_ped_speed": 1.6,
+            "cra_ped_idle_time": 0.0,
+            "cra_ped_yaw_offset": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "name": "pedestrian_direction_control",
+      "source_type": "PedestrianCrossing",
+      "target_type": "CRAPedestrianCrossing",
+      "route_ids": [
+        "13674",
+        "14382"
+      ],
+      "risk_order": "categorical",
+      "notes": "Same spawn/appearance; crossing vs walking away tests causal relevance rather than visual salience. v2 fixes pedestrian speed/idle across all matched variants to remove seed-induced kinematic variation.",
+      "variants": [
+        {
+          "label": "crossing",
+          "risk_rank": 1,
+          "params": {
+            "cra_reaction_time": 3.5,
+            "cra_min_trigger_dist": 4.0,
+            "cra_ped_yaw_offset": 0.0,
+            "cra_ped_speed": 1.6,
+            "cra_ped_idle_time": 0.0
+          }
+        },
+        {
+          "label": "away",
+          "risk_rank": 0,
+          "params": {
+            "cra_reaction_time": 3.5,
+            "cra_min_trigger_dist": 4.0,
+            "cra_ped_yaw_offset": 180.0,
+            "cra_ped_speed": 1.6,
+            "cra_ped_idle_time": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "name": "highway_cutin_speed",
+      "source_type": "HighwayCutIn",
+      "target_type": "CRAHighwayCutIn",
+      "route_ids": [
+        "3816",
+        "23842",
+        "2299",
+        "23697"
+      ],
+      "risk_order": "ascending_variant_index",
+      "notes": "Lower cut-in speed percentage increases closing-rate demand; realized closing speed/TTC are logged.",
+      "variants": [
+        {
+          "label": "nominal_b2d",
+          "risk_rank": null,
+          "use_source_scenario": true,
+          "params": {}
+        },
+        {
+          "label": "sp110",
+          "risk_rank": 0,
+          "params": {
+            "cra_speed_perc": 110.0
+          }
+        },
+        {
+          "label": "sp100",
+          "risk_rank": 1,
+          "params": {
+            "cra_speed_perc": 100.0
+          }
+        },
+        {
+          "label": "sp90",
+          "risk_rank": 2,
+          "params": {
+            "cra_speed_perc": 90.0
+          }
+        },
+        {
+          "label": "sp80",
+          "risk_rank": 3,
+          "params": {
+            "cra_speed_perc": 80.0
+          }
+        },
+        {
+          "label": "sp70",
+          "risk_rank": 4,
+          "params": {
+            "cra_speed_perc": 70.0
+          }
+        }
+      ]
+    }
+  ]
+}

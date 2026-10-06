@@ -7,6 +7,10 @@ only a small set of physical parameters read from config.other_parameters.
 """
 from __future__ import print_function
 
+import json
+import os
+from pathlib import Path
+
 import carla
 
 from srunner.scenariomanager.carla_data_provider import CarlaDataProvider
@@ -21,6 +25,18 @@ def _param(config, name, cast, default):
         return default
     value = config.other_parameters[name].get("value", default)
     return cast(value)
+
+
+def _write_scenario_meta(payload):
+    path=os.environ.get("CRADRIVE_SCENARIO_META_PATH")
+    if not path:
+        return
+    try:
+        p=Path(path); p.parent.mkdir(parents=True,exist_ok=True)
+        with open(p,"w",encoding="utf-8") as f:
+            json.dump(payload,f,indent=2,ensure_ascii=False)
+    except Exception as exc:
+        print("[CRADrive] WARN could not write scenario meta:",repr(exc))
 
 
 class CRAPedestrianCrossing(PedestrianCrossing):
@@ -73,6 +89,28 @@ class CRAPedestrianCrossing(PedestrianCrossing):
             self, "CRAPedestrianCrossing", ego_vehicles, config, world, debug_mode,
             criteria_enable=criteria_enable
         )
+        try:
+            c=self._collision_wp.transform.location
+            walker_actors=[]
+            for actor,d in zip(self.other_actors,self._walker_data):
+                tf=d.get("transform")
+                walker_actors.append({
+                    "actor_id":int(actor.id),
+                    "speed":float(d.get("speed",self._adversary_speed)),
+                    "idle_time":float(d.get("idle_time",0.0)),
+                    "world_yaw":float(tf.rotation.yaw) if tf is not None else None,
+                    "spawn_location":[float(tf.location.x),float(tf.location.y),float(tf.location.z)] if tf is not None else None,
+                })
+            _write_scenario_meta({
+                "scenario":"CRAPedestrianCrossing",
+                "reaction_time":self._reaction_time,
+                "min_trigger_dist":self._min_trigger_dist,
+                "collision_location":[float(c.x),float(c.y),float(c.z)],
+                "walker_data":[{k:v for k,v in d.items() if k not in ("transform",)} for d in self._walker_data],
+                "walker_actors":walker_actors,
+            })
+        except Exception as exc:
+            print("[CRADrive] WARN pedestrian scenario metadata:",repr(exc))
 
 
 class CRAHighwayCutIn(HighwayCutIn):
@@ -110,6 +148,15 @@ class CRAHighwayCutIn(HighwayCutIn):
             self, "CRAHighwayCutIn", ego_vehicles, config, world, debug_mode,
             criteria_enable=criteria_enable
         )
+        _write_scenario_meta({
+            "scenario":"CRAHighwayCutIn",
+            "speed_perc":self._speed_perc,
+            "cut_in_distance":self._cut_in_distance,
+            "same_lane_time":self._same_lane_time,
+            "other_lane_time":self._other_lane_time,
+            "change_time":self._change_time,
+            "start_location":[float(self._start_location.x),float(self._start_location.y),float(self._start_location.z)],
+        })
 
 
 class CRAHardBreakRoute(HardBreakRoute):
